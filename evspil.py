@@ -260,7 +260,12 @@ def forventet_gevinst_n(p, M):
 
 
 def replicator_skridt_n(p, M):
-    """Et skridt af replicator-dynamikken med n strategier."""
+    """Et skridt af replicator-dynamikken med n strategier.
+
+    Bemærk: Med negative gevinster (eller nul-sum-spil som firben) kan den naive
+    formel p * E / E_gns give E_gns = 0 eller negative værdier. Brug
+    `_replicator_skridt_n_stabil` til simuleringer.
+    """
     p = np.asarray(p, dtype=float)
     E = forventet_gevinst_n(p, M)
     E_gns = float(p @ E)
@@ -269,8 +274,31 @@ def replicator_skridt_n(p, M):
     return p * E / E_gns
 
 
+def _replicator_skridt_n_stabil(p, M):
+    """Stabil version af n-strategi replicator-skridt.
+
+    Skifter gevinstmatricen så alle entries er positive. Replicator-dynamikken har
+    samme fikspunkter under additiv shift, så ESS er den samme. Resultatet
+    normaliseres til en gyldig sandsynlighedsfordeling.
+    """
+    M = np.asarray(M, dtype=float)
+    p = np.asarray(p, dtype=float)
+    shift = max(0.0, -float(M.min()) + 1.0)
+    M_shifted = M + shift
+    E = M_shifted @ p
+    E_gns = float(p @ E)
+    if E_gns <= 0:
+        return p
+    p_ny = p * E / E_gns
+    p_ny = np.clip(p_ny, 0.0, None)
+    s = p_ny.sum()
+    if s > 0:
+        p_ny = p_ny / s
+    return p_ny
+
+
 def simuler_replicator_n(p0, M, n_generationer):
-    """Simulerer replicator-dynamikken med n strategier.
+    """Simulerer replicator-dynamikken med n strategier (numerisk stabil version).
 
     Returnerer et (n_generationer+1) x n array med andelene over tid.
     """
@@ -279,7 +307,7 @@ def simuler_replicator_n(p0, M, n_generationer):
     historik = np.zeros((n_generationer + 1, n))
     historik[0] = p0
     for t in range(n_generationer):
-        historik[t + 1] = replicator_skridt_n(historik[t], M)
+        historik[t + 1] = _replicator_skridt_n_stabil(historik[t], M)
     return historik
 
 
